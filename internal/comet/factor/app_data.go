@@ -118,6 +118,7 @@ func (a *appData) ImportAppData(ctx context.Context, task *models.Task, handleDa
 	}
 	err = a.appCenter.SuccessImport(ctx, appID)
 	if err != nil {
+		logger.Logger.Errorw("app-center success import error", err)
 		err = error2.New(code.ErrInternalError)
 		result[titleKey] = err.Error()
 		a.sendMessage(err, result, task, handleData)
@@ -164,6 +165,7 @@ func (a *appData) UseTemplate(ctx context.Context, task *models.Task, handleData
 	}
 	err = a.appCenter.SuccessImport(ctx, req.AppID)
 	if err != nil {
+		logger.Logger.Errorw("app-center success import error", err)
 		err = error2.New(code.ErrInternalError)
 		result[titleKey] = err.Error()
 		a.sendMessage(err, result, task, handleData)
@@ -204,6 +206,7 @@ func (a *appData) CreateTemplate(ctx context.Context, task *models.Task, handleD
 	}
 	_, err = a.appCenter.FinishTemplate(ctx, id, path)
 	if err != nil {
+		logger.Logger.Errorw("app-center finish template error", err)
 		err = error2.New(code.ErrInternalError)
 		result[titleKey] = err.Error()
 		a.sendMessage(err, result, task, handleData)
@@ -241,6 +244,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	appName := appInfoResp.AppName
 	appInfo, err := json.Marshal(appInfoResp)
 	if err != nil {
+		logger.Logger.Errorw("json marshal error", err)
 		return "", "", error2.New(code.ErrInternalError)
 	}
 	zipInfo = append(zipInfo, zip2.FileInfo{
@@ -328,6 +332,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	// serialize md5 information
 	md5InfoBytes, err := json.Marshal(md5Info)
 	if err != nil {
+		logger.Logger.Errorw("md5 information json marshal error", err)
 		return "", "", error2.New(code.ErrInternalError)
 	}
 	// base64 encoding the md5 information
@@ -340,6 +345,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	// package the all information
 	buf, err := zip2.PackagingToBuffer(ctx, zipInfo)
 	if err != nil {
+		logger.Logger.Errorw("package to zip error", err)
 		return "", "", error2.New(code.ErrInternalError)
 	}
 	a.sendRate(task, handleData, 70)
@@ -349,7 +355,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	err = a.fileSDK.UploadFile(ctx, path, buf, int64(buf.Len()))
 	if err != nil {
 		logger.Logger.Errorw("file server sdk error", err)
-		return "", "", error2.New(code.ErrInternalError, "文件上次错误")
+		return "", "", error2.New(code.ErrInternalError)
 	}
 	a.sendRate(task, handleData, 90)
 	return path, fileName, nil
