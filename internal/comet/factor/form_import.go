@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"git.internal.yunify.com/qxp/fileserver/pkg/guide"
 	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
 	time2 "github.com/quanxiang-cloud/cabin/time"
@@ -15,6 +14,7 @@ import (
 	"github.com/quanxiang-cloud/entrepot/pkg/client"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/code"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
+	"github.com/quanxiang-cloud/fileserver/pkg/guide"
 	"github.com/xuri/excelize/v2"
 )
 
