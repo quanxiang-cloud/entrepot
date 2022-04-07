@@ -348,6 +348,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 
 	err = a.fileSDK.UploadFile(ctx, path, buf, int64(buf.Len()))
 	if err != nil {
+		logger.Logger.Errorw("file server sdk error", err)
 		return "", "", error2.New(code.ErrInternalError, "文件上次错误")
 	}
 	a.sendRate(task, handleData, 90)
