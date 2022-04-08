@@ -9,7 +9,6 @@ import (
 )
 
 const (
-	removeAPI     = "/api/v1/flow/deleteApp"
 	exportFlowAPI = "/api/v1/flow/appReplicationExport"
 	importFlowAPI = "/api/v1/flow/appReplicationImport"
 )
