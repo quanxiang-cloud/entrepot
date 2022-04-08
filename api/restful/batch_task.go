@@ -1,6 +1,7 @@
 package restful
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/gin-gonic/gin"
 	error2 "github.com/quanxiang-cloud/cabin/error"
@@ -56,7 +57,8 @@ func (batch *BatchTask) CreatTask(c *gin.Context) {
 		resp.Format(nil, error2.New(code.ErrParamFormat)).Context(c)
 		return
 	}
-	resp.Format(batch.batchTask.CreateTask(header2.MutateContext(c), batchReq)).Context(c)
+	ctx := transformCTX(header2.MutateContext(c), c)
+	resp.Format(batch.batchTask.CreateTask(ctx, batchReq)).Context(c)
 
 }
 
@@ -130,4 +132,16 @@ func checkName(name string) bool {
 		return false
 	}
 	return result
+}
+
+func transformCTX(ctx context.Context, c *gin.Context) context.Context {
+	var (
+		_userID   interface{} = "User-Id"
+		_userName interface{} = "User-Name"
+		userID    string      = "User-Id"
+		userName  string      = "User-Name"
+	)
+	ctx = context.WithValue(ctx, _userID, c.GetHeader(userID))
+	ctx = context.WithValue(ctx, _userName, c.GetHeader(userName))
+	return ctx
 }
