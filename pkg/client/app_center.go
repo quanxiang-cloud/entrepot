@@ -58,7 +58,7 @@ func (a *appCenter) ExportAppInfo(ctx context.Context, appID string) (*ExportApp
 	}
 	url := a.conf.AppCenterHost + exportAppURL
 	resp := &ExportAppInfoResp{}
-	err := client.POST(ctx, &a.client, url, req, resp)
+	err := doPOST(ctx, &a.client, url, req, resp)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,7 @@ func (a *appCenter) CheckVersion(ctx context.Context, version string) error {
 	}
 	url := a.conf.AppCenterHost + checkVersionURL
 	resp := map[string]interface{}{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func (a *appCenter) FailImport(ctx context.Context, appID string) error {
 	}
 	url := a.conf.AppCenterHost + failImportURL
 	resp := map[string]interface{}{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (a *appCenter) SuccessImport(ctx context.Context, appID string) error {
 	}
 	url := a.conf.AppCenterHost + successImportURL
 	resp := map[string]interface{}{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return err
 	}
@@ -135,7 +135,7 @@ type CreateTemplateResp struct {
 func (a *appCenter) CreateTemplate(ctx context.Context, req *CreateTemplateReq) (*CreateTemplateResp, error) {
 	url := a.conf.AppCenterHost + createTemplateURL
 	resp := &CreateTemplateResp{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (a *appCenter) GetTemplateByID(ctx context.Context, id string) (*GetTemplat
 	}
 	url := a.conf.AppCenterHost + getTemplateURL
 	resp := &GetTemplateByIDResp{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +190,7 @@ func (a *appCenter) FinishTemplate(ctx context.Context, id, path string) (*Finis
 	}
 	url := a.conf.AppCenterHost + finishTemplateURL
 	resp := &FinishTemplateResp{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +209,7 @@ func (a *appCenter) DeleteTemplate(ctx context.Context, id string) (*DeleteTempl
 	}
 	url := a.conf.AppCenterHost + deleteTemplateURL
 	resp := &DeleteTemplateResp{}
-	err := client.POST(ctx, &a.client, url, req, &resp)
+	err := doPOST(ctx, &a.client, url, req, &resp)
 	if err != nil {
 		return nil, err
 	}
