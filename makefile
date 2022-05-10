@@ -1,22 +1,4 @@
-name=entrepot
-version=v0.0.1
-devHost=192.168.200.20
-devUser=ubuntu
-
-repository=lowcode
-dockerHost=dockerhub.qingcloud.com
-
-env:
-#-- open go mod vendor --
-	go mod vendor
-
-test:
-	go test -coverprofile=coverage.out ./...
-	go tool cover -html=coverage.out
-dev: linux
-	./dev_auto.sh
-linux:
-	GOOS=linux GOOSARCH=amd64 go build -o $(name) ./cmd/.
-docker-test: env
-	docker build -t $(dockerHost)/$(repository)/$(name):$(version) .
-	docker push  $(dockerHost)/$(repository)/$(name):$(version)
+CONF ?=$(shell pwd)/configs
+.PHONY: run-entrepot
+generate:
+	dapr run --app-id entrepot --app-port 81 --components-path ${CONF}/samples -- go run cmd/main.go --config ${CONF}/config.yml

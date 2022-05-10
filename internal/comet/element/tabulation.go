@@ -176,24 +176,24 @@ type userPicker struct {
 }
 
 func (o *userPicker) GetValueByString(ctx context.Context, value string) (interface{}, code.ErrorType) {
-	userArr := strings.Split(value, splitSign)
-	respArr := make([]logic.M, 0)
-	for _, userName := range userArr {
-		respUser, err := o.orgAPI.GetUserList(ctx, userName)
-		if err != nil {
-			return nil, code.ErrDataNotFind
-		}
-		if len(respUser) != 1 {
-			return nil, code.ErrDataNotFind
-		}
-		entity1 := logic.M{
-			"label": userName,
-			"value": respUser[0].ID,
-		}
-		respArr = append(respArr, entity1)
-	}
-	return respArr, code.NoError
-
+	//userArr := strings.Split(value, splitSign)
+	//respArr := make([]logic.M, 0)
+	//for _, userName := range userArr {
+	//	respUser, err := o.orgAPI.GetUserList(ctx, userName)
+	//	if err != nil {
+	//		return nil, code.ErrDataNotFind
+	//	}
+	//	if len(respUser) != 1 {
+	//		return nil, code.ErrDataNotFind
+	//	}
+	//	entity1 := logic.M{
+	//		"label": userName,
+	//		"value": respUser[0].ID,
+	//	}
+	//	respArr = append(respArr, entity1)
+	//}
+	//return respArr, code.NoError
+	return nil, 0
 }
 
 func (o *userPicker) GetTag() string {

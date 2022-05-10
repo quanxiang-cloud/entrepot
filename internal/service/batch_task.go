@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	error2 "github.com/quanxiang-cloud/cabin/error"
-	id2 "github.com/quanxiang-cloud/cabin/id"
 	"github.com/quanxiang-cloud/cabin/logger"
 	mysql2 "github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
 	redis2 "github.com/quanxiang-cloud/cabin/tailormade/db/redis"
@@ -60,84 +59,12 @@ func NewBatchTask(conf *config.Config, factor chan *comet.FactorData) (BatchTask
 	}
 	return &task{
 		conf:   conf,
-		factor: factor,
 		db:     db,
+		factor: factor,
 		mold:   factor2.GetMolds(),
 		task:   mysql.NewTaskRepo(),
 		ps:     redis.NewPubSub(redisClient),
 	}, nil
-}
-
-// CreateTaskReq CreateTaskReq
-type CreateTaskReq struct {
-	UserID   string  `json:"userID"`
-	UserName string  `json:"userName"`
-	DepID    string  `json:"depID"`
-	Value    logic.M `json:"value" binding:"required"`
-	Addr     string  `json:"addr"`
-	Opt      string  `json:"opt"`
-	Size     int     `json:"size"`
-	Command  string  `json:"command" binding:"required"`
-	Title    string  `json:"title"`
-}
-
-// CreateTaskResp CreateTaskResp
-type CreateTaskResp struct {
-	TaskID string `json:"taskID"`
-}
-
-func (t *task) CreateTask(ctx context.Context, req *CreateTaskReq) (*CreateTaskResp, error) {
-	// create task
-	task1 := &models.Task{
-		ID:          id2.StringUUID(),
-		FileAddr:    req.Addr,
-		FileOpt:     req.Opt,
-		FileSize:    req.Size,
-		CreatorID:   req.UserID,
-		CreatorName: req.UserName,
-		Command:     req.Command,
-		Title:       req.Title,
-		Value:       getValue(req.Value),
-		Status:      models.TaskDoing,
-		DepID:       req.DepID,
-	}
-	tasks, err := t.task.GetByCondition(t.db, task1)
-	if err != nil {
-		return nil, err
-	}
-	if tasks != nil {
-		return nil, error2.New(code.ErrNotRepeat)
-	}
-	task1.Types = managerTypes
-	_, ok := logic.HomeMap[logic.Command(req.Command)]
-	if ok {
-		task1.Types = homeTypes
-	}
-	molders, ok := t.mold.GetMolders(ctx, logic.Command(req.Command), t.conf)
-	if !ok {
-		return nil, error2.New(code.ErrInternalError)
-	}
-	err = molders.SetTaskTitle(ctx, task1)
-	if err != nil {
-		return nil, err
-	}
-
-	err = t.task.Create(t.db, task1)
-	if err != nil {
-		return nil, err
-	}
-	factorData := &comet.FactorData{
-		Command: req.Command,
-		Task:    task1,
-		Ctx:     ctx,
-	}
-	// send to channel
-	t.factor <- factorData
-
-	return &CreateTaskResp{
-		TaskID: task1.ID,
-	}, nil
-
 }
 
 func getValue(m logic.M) models.M {
@@ -338,4 +265,16 @@ func (t *task) Delete(ctx context.Context, req *DeleteReq) (*DeleteResp, error) 
 		return nil, err
 	}
 	return &DeleteResp{}, nil
+}
+
+type DaprEvent struct {
+	Topic           string         `json:"topic"`
+	Pubsubname      string         `json:"pubsubname"`
+	Traceid         string         `json:"traceid"`
+	ID              string         `json:"id"`
+	Datacontenttype string         `json:"datacontenttype"`
+	Data            *CreateTaskReq `json:"data"`
+	Type            string         `json:"type"`
+	Specversion     string         `json:"specversion"`
+	Source          string         `json:"source"`
 }

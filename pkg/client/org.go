@@ -2,16 +2,22 @@ package client
 
 import (
 	"context"
+	"fmt"
+	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/cabin/tailormade/client"
+	"github.com/quanxiang-cloud/cabin/tailormade/header"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
+
+	"io/ioutil"
+
 	"net/http"
+	"net/url"
 )
 
 const (
-	host         = "http://org/api/v1/org"
-	adminDepList = "/adminDEPList"
-	getUserInfo  = "/otherGetUserList"
-	depTree      = "/DEPTree"
+	host    = "http://org/api/v1/org"
+	depTree = "/m/dep/tree"
+	apiURL  = "http://search/api/v1/search/user"
 )
 
 type orgAPI struct {
@@ -20,9 +26,8 @@ type orgAPI struct {
 }
 
 func (o *orgAPI) DepTree(ctx context.Context) (*TreeResp, error) {
-	params := struct{}{}
 	resp := &TreeResp{}
-	err := client.POST(ctx, &o.client, host+depTree, params, resp)
+	err := Get(ctx, &o.client, host+depTree, resp, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -35,23 +40,16 @@ func (o *orgAPI) Close() {
 
 // OrgAPI OrgAPI
 type OrgAPI interface {
-	GetUserList(ctx context.Context, userName string) ([]GetUserListResp, error)
-	GetDepList(ctx context.Context, depName string) (*GetDepListResp, error)
 	DepTree(ctx context.Context) (*TreeResp, error)
+	GetUserList(ctx context.Context, userName string) (*GetUserListResp, error)
 	Close()
 }
 
-// TreeResp  TreeResp
+// TreeResp  树形返回结构
 type TreeResp struct {
-	ID                 string     `json:"id,omitempty"`
-	DepartmentName     string     `json:"departmentName,omitempty"`
-	DepartmentLeaderID string     `json:"departmentLeaderID,omitempty"`
-	UseStatus          int        `json:"useStatus,omitempty"`
-	PID                string     `json:"pid,omitempty"`
-	SuperPID           string     `json:"superID,omitempty"`
-	CompanyID          string     `json:"companyID,omitempty"`
-	Grade              int        `json:"grade,omitempty"`
-	Child              []TreeResp `json:"child"`
+	ID             string     `json:"id,omitempty"`
+	DepartmentName string     `json:"name,omitempty"`
+	Child          []TreeResp `json:"child"`
 }
 
 // NewOrgAPI NewOrgAPI
@@ -80,35 +78,63 @@ type AdminDepartment struct {
 
 // GetUserListResp GetUserListResp
 type GetUserListResp struct {
-	ID       string `json:"id,omitempty"`
-	UserName string `json:"userName,omitempty"`
+	Total int64         `json:"total"`
+	Users []*listVoResp `json:"users"`
 }
 
-func (o *orgAPI) GetDepList(ctx context.Context, depName string) (*GetDepListResp, error) {
-	params := struct {
-		DepartmentName string `json:"departmentName"`
-	}{
-		DepartmentName: depName,
-	}
-	resp := &GetDepListResp{}
-	err := client.POST(ctx, &o.client, host+adminDepList, params, resp)
+//listVoResp
+type listVoResp struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (o *orgAPI) GetUserList(ctx context.Context, userName string) (*GetUserListResp, error) {
+	resp := &GetUserListResp{}
+
+	value := url.Values{}
+	query := fmt.Sprintf(`{query(name:"%s"){users{id,name},total}}`, userName)
+	value.Set("query", query)
+	err := Get(ctx, &o.client, apiURL, resp, value)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
 }
 
-func (o *orgAPI) GetUserList(ctx context.Context, userName string) ([]GetUserListResp, error) {
-	params := struct {
-		UserName string `json:"userName"`
-	}{
-		UserName: userName,
+//Get Get
+func Get(ctx context.Context, client *http.Client, urls string, entity interface{}, values url.Values) error {
+	u, err := url.ParseRequestURI(urls)
+	if err != nil {
+		logger.Logger.Errorw(err.Error(), header.GetRequestIDKV(ctx).Fuzzy()...)
+		return err
+	}
+	if values != nil {
+		u.RawQuery = values.Encode() // URL encode
+		logger.Logger.WithName("get").Infow(u.String(), header.GetRequestIDKV(ctx).Fuzzy()...)
+	}
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		logger.Logger.Errorw(err.Error(), header.GetRequestIDKV(ctx).Fuzzy()...)
+		return err
+	}
+	req.Header.Add(header.GetRequestIDKV(ctx).Wreck())
+	req.Header.Add(header.GetTimezone(ctx).Wreck())
+	req.Header.Add(header.GetTenantID(ctx).Wreck())
+	response, err := client.Do(req)
+	if err != nil {
+		logger.Logger.Errorw(err.Error(), header.GetRequestIDKV(ctx).Fuzzy()...)
+		return err
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("expected state value is 200, actually %d", response.StatusCode)
 	}
 
-	var batch []GetUserListResp
-	err := client.POST(ctx, &o.client, host+getUserInfo, params, &batch)
+	body, err := ioutil.ReadAll(response.Body)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return batch, nil
+
+	return decomposeBody(body, entity)
 }

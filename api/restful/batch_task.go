@@ -3,14 +3,17 @@ package restful
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	error2 "github.com/quanxiang-cloud/cabin/error"
-	header2 "github.com/quanxiang-cloud/cabin/tailormade/header"
+	"github.com/quanxiang-cloud/cabin/logger"
+	"github.com/quanxiang-cloud/cabin/tailormade/header"
 	"github.com/quanxiang-cloud/cabin/tailormade/resp"
 	"github.com/quanxiang-cloud/entrepot/internal/comet"
 	"github.com/quanxiang-cloud/entrepot/internal/service"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/code"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
+	"io/ioutil"
 	"net/http"
 	"regexp"
 )
@@ -44,8 +47,10 @@ func (batch *BatchTask) CreatTask(c *gin.Context) {
 		UserName: c.GetHeader(_userName),
 		Command:  c.Param("command"),
 	}
+	ctx := header.MutateContext(c)
 	if err := c.ShouldBind(batchReq); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		logger.Logger.WithName("batchReq").Errorw(err.Error(), header.GetRequestIDKV(ctx).Fuzzy()...)
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 	value, err := json.Marshal(batchReq.Value)
@@ -57,7 +62,6 @@ func (batch *BatchTask) CreatTask(c *gin.Context) {
 		resp.Format(nil, error2.New(code.ErrParamFormat)).Context(c)
 		return
 	}
-	ctx := transformCTX(header2.MutateContext(c), c)
 	resp.Format(batch.batchTask.CreateTask(ctx, batchReq)).Context(c)
 
 }
@@ -66,11 +70,13 @@ func (batch *BatchTask) CreatTask(c *gin.Context) {
 func (batch *BatchTask) GetList(c *gin.Context) {
 	req := &service.GetListReq{}
 	req.UserID = c.GetHeader(_userID)
+	ctx := header.MutateContext(c)
 	if err := c.ShouldBind(req); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		logger.Logger.WithName("batchReq").Errorw(err.Error(), header.GetRequestIDKV(ctx).Fuzzy()...)
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	resp.Format(batch.batchTask.GetList(header2.MutateContext(c), req)).Context(c)
+	resp.Format(batch.batchTask.GetList(ctx, req)).Context(c)
 
 }
 
@@ -79,23 +85,24 @@ func (batch *BatchTask) GetByID(c *gin.Context) {
 	req := &service.GetByIDReq{
 		TaskID: c.Param("taskID"),
 	}
+	ctx := header.MutateContext(c)
 	if err := c.ShouldBind(req); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
-	resp.Format(batch.batchTask.GetByID(header2.MutateContext(c), req)).Context(c)
+	resp.Format(batch.batchTask.GetByID(ctx, req)).Context(c)
 }
 
 // Subscribe Subscribe
 func (batch *BatchTask) Subscribe(c *gin.Context) {
 	req := new(service.SubscribeReq)
-
+	ctx := header.MutateContext(c)
 	if err := c.ShouldBind(req); err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 	req.UserID = c.GetHeader(_userID)
-	resp.Format(batch.batchTask.Subscribe(header2.MutateContext(c), req)).Context(c)
+	resp.Format(batch.batchTask.Subscribe(ctx, req)).Context(c)
 
 }
 
@@ -104,12 +111,13 @@ func (batch *BatchTask) GetProcessing(c *gin.Context) {
 	req := &service.GetProcessingReq{
 		UserID: c.GetHeader(_userID),
 	}
+	ctx := header.MutateContext(c)
 	if err := c.ShouldBind(req); err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
-	resp.Format(batch.batchTask.GetProcessing(header2.MutateContext(c), req)).Context(c)
+	resp.Format(batch.batchTask.GetProcessing(ctx, req)).Context(c)
 
 }
 
@@ -118,11 +126,38 @@ func (batch *BatchTask) Delete(c *gin.Context) {
 	req := &service.DeleteReq{
 		TaskID: c.Param("taskID"),
 	}
+	ctx := header.MutateContext(c)
 	if err := c.ShouldBind(req); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	resp.Format(batch.batchTask.Delete(header2.MutateContext(c), req)).Context(c)
+	resp.Format(batch.batchTask.Delete(ctx, req)).Context(c)
+}
+
+func (batch *BatchTask) Send(c *gin.Context) {
+	body, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		errHandle(c, err)
+		return
+	}
+	event := new(service.DaprEvent)
+	err = json.Unmarshal(body, event)
+	if err != nil {
+		errHandle(c, err)
+		return
+	}
+	taskReq := event.Data
+	logger.Logger.Infow("task Req", "data is", taskReq)
+	ctx := header.MutateContext(c)
+	_, err = batch.batchTask.CreateTask(ctx, taskReq)
+	errHandle(c, err)
+}
+
+func errHandle(c *gin.Context, err error) {
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	c.JSON(http.StatusOK, nil)
 }
 
 func checkName(name string) bool {
