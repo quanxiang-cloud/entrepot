@@ -11,7 +11,6 @@ import (
 const (
 	appFileName        = "appInfo"
 	tableFileName      = "tableInfo"
-	perFileName        = "perInfo"
 	fileInfo           = "fileInfo"
 	flowFileName       = "flowInfo"
 	apiFileName        = "apiInfo"

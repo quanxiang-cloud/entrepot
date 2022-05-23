@@ -24,7 +24,7 @@ func NewFlow(conf *config.Config) Flow {
 // Flow Flow
 type Flow interface {
 	ExportFlow(ctx context.Context, appID string) (*ExportFlowResp, error)
-	ImportFlow(ctx context.Context, appID, jsons string, tableIDs map[string]string) (*ImportFlowResp, error)
+	ImportFlow(ctx context.Context, appID, jsons string) (*ImportFlowResp, error)
 	Close()
 }
 
@@ -60,15 +60,13 @@ func (f *flow) ExportFlow(ctx context.Context, appID string) (*ExportFlowResp, e
 type ImportFlowResp struct {
 }
 
-func (f *flow) ImportFlow(ctx context.Context, appID, jsons string, tableIDs map[string]string) (*ImportFlowResp, error) {
+func (f *flow) ImportFlow(ctx context.Context, appID, jsons string) (*ImportFlowResp, error) {
 	params := struct {
-		AppID    string            `json:"appID"`
-		Jsons    string            `json:"flows"`
-		TableIDs map[string]string `json:"formID"`
+		AppID string `json:"appID"`
+		Jsons string `json:"flows"`
 	}{
-		AppID:    appID,
-		Jsons:    jsons,
-		TableIDs: tableIDs,
+		AppID: appID,
+		Jsons: jsons,
 	}
 	resp := &ImportFlowResp{}
 	var x bool

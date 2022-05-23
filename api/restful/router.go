@@ -34,7 +34,7 @@ func NewRouter(ctx context.Context, c *config.Config) (*Router, error) {
 		return nil, err
 	}
 	batchTask, err := NewBatchTask(c, factor.Factor)
-	engine.Group("/create", batchTask.Send)
+	//engine.Group("/create", batchTask.Send)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +42,7 @@ func NewRouter(ctx context.Context, c *config.Config) (*Router, error) {
 	v1 := engine.Group("/api/v1/entrepot/")
 	task := v1.Group("/task")
 
-	//	task.POST("/create/:command", batchTask.CreatTask)
+	task.POST("/create/:command", batchTask.CreatTask)
 	task.POST("/list", batchTask.GetList)
 	task.POST("/get/:taskID", batchTask.GetByID)
 	task.POST("/subscribe", batchTask.Subscribe)

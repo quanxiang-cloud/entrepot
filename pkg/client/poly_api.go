@@ -49,17 +49,15 @@ type ImportAPIResp struct {
 }
 
 // ImportAPI ImportAPI
-func (p *polyapi) ImportAPI(ctx context.Context, oldAppID, newAppID, data string, tableIDs map[string]string) (*ImportAPIResp, error) {
+func (p *polyapi) ImportAPI(ctx context.Context, oldAppID, newAppID, data string) (*ImportAPIResp, error) {
 	req := struct {
-		OldID    string            `json:"oldID"`
-		NewID    string            `json:"newID"`
-		TableMap map[string]string `json:"tableMap"`
-		Data     string            `json:"data"`
+		OldID string `json:"oldID"`
+		NewID string `json:"newID"`
+		Data  string `json:"data"`
 	}{
-		OldID:    oldAppID,
-		NewID:    newAppID,
-		Data:     data,
-		TableMap: tableIDs,
+		OldID: oldAppID,
+		NewID: newAppID,
+		Data:  data,
 	}
 	resp := &ImportAPIResp{}
 	err := client.POST(ctx, &p.client, p.conf.PolyAPIHost+importAPI, req, resp)
@@ -77,5 +75,5 @@ func (p *polyapi) Close() {
 type PolyAPI interface {
 	Close()
 	ExportAPI(ctx context.Context, appID string) (*ExportAPIResp, error)
-	ImportAPI(ctx context.Context, oldAppID, newAppID, data string, tableIDs map[string]string) (*ImportAPIResp, error)
+	ImportAPI(ctx context.Context, oldAppID, newAppID, data string) (*ImportAPIResp, error)
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
 	"github.com/quanxiang-cloud/entrepot/pkg/zip2"
 	"github.com/quanxiang-cloud/fileserver/pkg/guide"
+	"github.com/quanxiang-cloud/form/pkg/backup"
 	"strings"
 )
 
@@ -40,6 +41,12 @@ const (
 	titleKey    = "title"
 )
 
+const (
+	staticNodeType    = "react-component"
+	staticPackageName = "SimpleViewRenders"
+	staticExportName  = "StaticViewRender"
+)
+
 // AppData deal with app information
 type AppData interface {
 	ExportAppData(ctx context.Context, task *models.Task, handleData chan *basal.CallBackData)
@@ -51,7 +58,7 @@ type AppData interface {
 type appData struct {
 	polyAPI   client.PolyAPI
 	flow      client.Flow
-	structor  client.Structor
+	form      *backup.Backup
 	fileSDK   *guide.Guide
 	appCenter client.AppCenter
 	persona   client.Persona
@@ -64,7 +71,7 @@ func NewAppData(conf *config.Config) AppData {
 		polyAPI:   client.NewPolyAPI(conf),
 		flow:      client.NewFlow(conf),
 		fileSDK:   fileSDK,
-		structor:  client.NewStructor(conf),
+		form:      backup.NewBackup(conf.InternalNet),
 		appCenter: client.NewAppCenter(conf),
 		persona:   client.NewPersona(conf),
 	}
@@ -249,34 +256,26 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	}
 	zipInfo = append(zipInfo, zip2.FileInfo{
 		Name: appFileName,
-		Body: []byte(appInfo),
+		Body: appInfo,
 	})
 	md5Info[appFileName] = getMd5(appInfo)
 	a.sendRate(task, handleData, 10)
 
+	formInfo := &bytes.Buffer{}
+
 	// export form
-	tableInfo, err := a.structor.ExportTable(ctx, appID)
+	err = a.form.Export(ctx, appID, formInfo)
 	if err != nil {
 		return "", "", err
 	}
 	zipInfo = append(zipInfo, zip2.FileInfo{
 		Name: tableFileName,
-		Body: []byte(tableInfo.JSONs),
+		Body: formInfo.Bytes(),
 	})
-	md5Info[tableFileName] = getMd5([]byte(tableInfo.JSONs))
+	md5Info[tableFileName] = getMd5(formInfo.Bytes())
 	a.sendRate(task, handleData, 20)
 
-	// save custom page and custom page's md5
-	for k, file := range tableInfo.PageFiles {
-		zipInfo = append(zipInfo, zip2.FileInfo{
-			Name: k,
-			Body: file,
-		})
-		md5Info[k] = getMd5(file)
-	}
-	a.sendRate(task, handleData, 30)
-
-	// export page engine
+	// export persona
 	pageEngines, err := a.persona.Export(ctx, appID)
 	if err != nil {
 		return "", "", err
@@ -292,22 +291,38 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	md5Info[pageEngineFileName] = getMd5(pages)
 	a.sendRate(task, handleData, 35)
 
-	// export permission
-	perInfo, err := a.structor.ExportPermission(ctx, appID)
-	if err != nil {
-		return "", "", err
+	// export static file
+	for _, kv := range pageEngines.AppData {
+		kvNode := new(node)
+		err = json.Unmarshal([]byte(kv.Value), kvNode)
+		if err != nil {
+			logger.Logger.Errorw("parsing persona data error", err)
+			return "", "", err
+		}
+		if kvNode.Node != nil {
+			path := getFileUrl(kvNode)
+			if path != "" {
+				path = customPageURLReplace(path)
+				file := &bytes.Buffer{}
+				err = a.fileSDK.DownloadFile(ctx, path, file)
+				if err != nil {
+					logger.Logger.Errorw("download static ", err)
+					continue
+				}
+				fileName := getFileName(path)
+				zipInfo = append(zipInfo, zip2.FileInfo{
+					Name: fileName,
+					Body: file.Bytes(),
+				})
+				md5Info[fileName] = getMd5(file.Bytes())
+			}
+		}
 	}
-	zipInfo = append(zipInfo, zip2.FileInfo{
-		Name: perFileName,
-		Body: []byte(perInfo.JSONs),
-	})
-	md5Info[perFileName] = getMd5([]byte(perInfo.JSONs))
-	a.sendRate(task, handleData, 40)
 
 	// export api
 	apiInfo, err := a.polyAPI.ExportAPI(ctx, appID)
 	if err != nil {
-
+		logger.Logger.Errorw("export api data error", err)
 		return "", "", err
 	}
 	zipInfo = append(zipInfo, zip2.FileInfo{
@@ -320,7 +335,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	// export flow
 	flowInfo, err := a.flow.ExportFlow(ctx, appID)
 	if err != nil {
-
+		logger.Logger.Errorw("export flow data error", err)
 		return "", "", err
 	}
 	zipInfo = append(zipInfo, zip2.FileInfo{
@@ -329,6 +344,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	})
 	md5Info[flowFileName] = getMd5([]byte(flowInfo.Jsons))
 	a.sendRate(task, handleData, 60)
+
 	// serialize md5 information
 	md5InfoBytes, err := json.Marshal(md5Info)
 	if err != nil {
@@ -359,11 +375,9 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	}
 	a.sendRate(task, handleData, 90)
 	return path, fileName, nil
-
 }
 
 func (a *appData) insertAppData(ctx context.Context, appID string, task *models.Task, handleData chan *basal.CallBackData) error {
-
 	// get the app file
 	fileBuffer := new(bytes.Buffer)
 	err := a.fileSDK.DownloadFile(ctx, task.FileAddr, fileBuffer)
@@ -384,12 +398,14 @@ func (a *appData) insertAppData(ctx context.Context, appID string, task *models.
 	// get the file md5 map
 	fileInfoBytes := fileInfos[fileInfo]
 	if fileInfoBytes == nil || len(fileInfoBytes) == 0 {
+		logger.Logger.Errorw("file verify error")
 		return error2.New(code.ErrFileFormat)
 	}
 	delete(fileInfos, fileInfo)
 	// decode the md5 information by base 64
 	md5Info, err := base64.StdEncoding.DecodeString(string(fileInfoBytes))
 	if err != nil {
+		logger.Logger.Errorw("base64 decode error")
 		return error2.New(code.ErrFileFormat)
 	}
 
@@ -400,37 +416,39 @@ func (a *appData) insertAppData(ctx context.Context, appID string, task *models.
 		return error2.New(code.ErrFileFormat)
 	}
 
-	var tableInfo, perInfo, apiInfo, flowInfo, pageEngineInfo string
-	var appBytes []byte
+	var tableInfo, appBytes, apiInfo, flowInfo, pageEngineInfo []byte
+	staticFileBytes := make([][]byte, 0)
 	// traverse the md5 map to get file information.if file not exist
 	for k, v := range fileMd5 {
 		fileBytes, ok := fileInfos[k]
 		if !ok {
+			logger.Logger.Errorf("get file %s error", k)
 			return error2.New(code.ErrFileFormat)
 		}
 		if getMd5(fileBytes) != v {
+			logger.Logger.Errorf("get %s md5 error", k)
 			return error2.New(code.ErrFileFormat)
 		}
 
 		// get enum information
 		switch k {
-		case tableFileName:
-			tableInfo = string(fileBytes)
+		case tableFileName: // form data
+			tableInfo = fileBytes
 			delete(fileInfos, k)
-		case appFileName:
+		case appFileName: // app data
 			appBytes = fileBytes
 			delete(fileInfos, k)
-		case perFileName:
-			perInfo = string(fileBytes)
+		case apiFileName: // api data
+			apiInfo = fileBytes
 			delete(fileInfos, k)
-		case apiFileName:
-			apiInfo = string(fileBytes)
+		case flowFileName: // flow data
+			flowInfo = fileBytes
 			delete(fileInfos, k)
-		case flowFileName:
-			flowInfo = string(fileBytes)
+		case pageEngineFileName: // persona data
+			pageEngineInfo = fileBytes
 			delete(fileInfos, k)
-		case pageEngineFileName:
-			pageEngineInfo = string(fileBytes)
+		default:
+			staticFileBytes = append(staticFileBytes, fileInfoBytes)
 			delete(fileInfos, k)
 		}
 	}
@@ -443,6 +461,7 @@ func (a *appData) insertAppData(ctx context.Context, appID string, task *models.
 	}{}
 	err = json.Unmarshal(appBytes, appStruct)
 	if err != nil {
+		logger.Logger.Errorw("json unmarshal app information error")
 		return error2.New(code.ErrFileFormat)
 	}
 	oldAppID := appStruct.AppID
@@ -450,51 +469,49 @@ func (a *appData) insertAppData(ctx context.Context, appID string, task *models.
 	// check version compatible
 	err = a.appCenter.CheckVersion(ctx, appStruct.Version)
 	if err != nil {
+		logger.Logger.Errorw("version verify not pass")
 		return error2.New(code.ErrVersion)
 	}
 
 	a.sendRate(task, handleData, 10)
 	var tableIDs map[string]string
-	if tableInfo != "" {
-		tableResp, err := a.structor.ImportTable(ctx, appID, oldAppID, tableInfo, fileInfos)
+	if tableInfo != nil {
+		err := a.form.Import(ctx, appID, bytes.NewReader(tableInfo))
 		if err != nil {
+			logger.Logger.Errorw("import form data error", err)
 			return err
 		}
-		tableIDs = tableResp.TableIDs
 	}
 	a.sendRate(task, handleData, 30)
-	logger.Logger.Info("---------------------------------------------")
-	logger.Logger.Info(pageEngineInfo)
-	logger.Logger.Info("---------------------------------------------")
-	if pageEngineInfo != "" {
+
+	if pageEngineInfo != nil {
 		pageEngineData := make([]*client.KV, 0)
 		err := json.Unmarshal([]byte(pageEngineInfo), &pageEngineData)
 		if err != nil {
+			logger.Logger.Errorw("pageEngine json unmarshal error", err)
 			return err
 		}
 		data := replacePageKey(pageEngineData, tableIDs, oldAppID, appID)
 		_, err = a.persona.Import(ctx, data)
 		if err != nil {
+			logger.Logger.Errorw("import persona information error", err)
 			return err
 		}
 	}
-	if perInfo != "" {
-		_, err := a.structor.ImportPermission(ctx, appID, perInfo, tableIDs)
-		if err != nil {
-			return err
-		}
-	}
+
 	a.sendRate(task, handleData, 50)
-	if apiInfo != "" {
-		_, err := a.polyAPI.ImportAPI(ctx, oldAppID, appID, apiInfo, tableIDs)
+	if apiInfo != nil {
+		_, err := a.polyAPI.ImportAPI(ctx, oldAppID, appID, string(apiInfo))
 		if err != nil {
+			logger.Logger.Errorw("import api information error", err)
 			return err
 		}
 	}
 	a.sendRate(task, handleData, 70)
-	if flowInfo != "" {
-		_, err := a.flow.ImportFlow(ctx, appID, flowInfo, tableIDs)
+	if flowInfo != nil {
+		_, err := a.flow.ImportFlow(ctx, appID, string(flowInfo))
 		if err != nil {
+			logger.Logger.Errorw("import flow information error", err)
 			return err
 		}
 	}
@@ -539,7 +556,6 @@ func (a *appData) sendRate(task *models.Task, handleData chan *basal.CallBackDat
 func (a *appData) closeConnect() {
 	a.polyAPI.Close()
 	a.flow.Close()
-	a.structor.Close()
 	a.appCenter.Close()
 }
 
@@ -548,20 +564,72 @@ func getMd5(info []byte) string {
 	return hex.EncodeToString(md5info[:])
 }
 
+func getFileUrl(nd *node) string {
+	if nd.Children != nil && len(nd.Children) != 0 {
+		for _, n := range nd.Children {
+			url := getFileUrl(n)
+			if url != "" {
+				return url
+			}
+		}
+		return ""
+	}
+	if nd.Node != nil {
+		n := nd.Node
+		if n.PackageName == staticPackageName &&
+			n.ExportName == staticExportName &&
+			n.Type == staticNodeType {
+			return n.Props["fileUrl"].Value
+		}
+	}
+	return ""
+}
+
 func replacePageKey(kvs []*client.KV, menus map[string]string, oldAppID, appID string) []*client.KV {
 	datas := make([]*client.KV, 0, len(kvs))
 	for _, kv := range kvs {
 		newK := strings.ReplaceAll(kv.Key, oldAppID, appID)
-		for k, v := range menus {
-			if strings.Contains(newK, k) {
-				newK = strings.ReplaceAll(newK, k, v)
-				datas = append(datas, &client.KV{
-					Key:   newK,
-					Value: kv.Value,
-				})
-				break
-			}
-		}
+		datas = append(datas, &client.KV{
+			Key:   newK,
+			Value: kv.Value,
+		})
 	}
 	return datas
+}
+
+type node struct {
+	ID             string        `json:"id"`
+	Type           string        `json:"type"`
+	Path           string        `json:"path"`
+	Name           string        `json:"name"`
+	Node           *node         `json:"node"`
+	Label          string        `json:"label"`
+	PackageName    string        `json:"packageName"`
+	PackageVersion string        `json:"packageVersion"`
+	ExportName     string        `json:"exportName"`
+	Children       []*node       `json:"children"`
+	Props          map[string]tv `json:"props"`
+}
+
+type tv struct {
+	Type  string `json:"type"`
+	Value string `json:"value"`
+}
+
+func customPageURLReplace(url string) string {
+	url = strings.TrimPrefix(url, "/blob/")
+	index := strings.LastIndex(url, ".html")
+	if index < 0 {
+		return ""
+	}
+	return url[0:index] + ".zip"
+}
+
+func getFileName(path string) string {
+	idx := strings.LastIndex(path, "/")
+	if idx != -1 {
+		path = path[:idx]
+	}
+	idx = strings.LastIndex(path, "/")
+	return path[idx+1:]
 }
