@@ -300,7 +300,7 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 			return "", "", err
 		}
 		if kvNode.Node != nil {
-			path := getFileUrl(kvNode)
+			path := getFileURL(kvNode)
 			if path != "" {
 				path = customPageURLReplace(path)
 				file := &bytes.Buffer{}
@@ -564,10 +564,10 @@ func getMd5(info []byte) string {
 	return hex.EncodeToString(md5info[:])
 }
 
-func getFileUrl(nd *node) string {
+func getFileURL(nd *node) string {
 	if nd.Children != nil && len(nd.Children) != 0 {
 		for _, n := range nd.Children {
-			url := getFileUrl(n)
+			url := getFileURL(n)
 			if url != "" {
 				return url
 			}

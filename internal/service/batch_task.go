@@ -267,6 +267,7 @@ func (t *task) Delete(ctx context.Context, req *DeleteReq) (*DeleteResp, error) 
 	return &DeleteResp{}, nil
 }
 
+// DaprEvent DaprEvent
 type DaprEvent struct {
 	Topic           string         `json:"topic"`
 	Pubsubname      string         `json:"pubsubname"`

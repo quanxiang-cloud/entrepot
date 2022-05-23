@@ -134,6 +134,7 @@ func (batch *BatchTask) Delete(c *gin.Context) {
 	resp.Format(batch.batchTask.Delete(ctx, req)).Context(c)
 }
 
+// Send Send
 func (batch *BatchTask) Send(c *gin.Context) {
 	body, err := ioutil.ReadAll(c.Request.Body)
 	if err != nil {
