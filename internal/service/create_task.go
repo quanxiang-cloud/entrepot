@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"github.com/quanxiang-cloud/cabin/id"
 	"github.com/quanxiang-cloud/entrepot/internal/comet"
 	"github.com/quanxiang-cloud/entrepot/internal/logic"
 	"github.com/quanxiang-cloud/entrepot/internal/models"
@@ -29,7 +30,7 @@ type CreateTaskResp struct {
 func (t *task) CreateTask(ctx context.Context, req *CreateTaskReq) (*CreateTaskResp, error) {
 	// create task
 	task1 := &models.Task{
-		ID:          req.ID,
+		ID:          id.StringUUID(),
 		FileAddr:    req.Addr,
 		FileOpt:     req.Opt,
 		FileSize:    req.Size,
@@ -58,7 +59,7 @@ func (t *task) CreateTask(ctx context.Context, req *CreateTaskReq) (*CreateTaskR
 	// 发到channel
 	t.factor <- factorData
 	return &CreateTaskResp{
-		//TaskID: task1.ID,
+		TaskID: task1.ID,
 	}, nil
 
 }

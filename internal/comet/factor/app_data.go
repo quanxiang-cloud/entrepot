@@ -10,6 +10,7 @@ import (
 	"fmt"
 	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
+	"github.com/quanxiang-cloud/cabin/tailormade/header"
 	time2 "github.com/quanxiang-cloud/cabin/time"
 	"github.com/quanxiang-cloud/entrepot/internal/comet/basal"
 	"github.com/quanxiang-cloud/entrepot/internal/logic"
@@ -20,6 +21,7 @@ import (
 	"github.com/quanxiang-cloud/entrepot/pkg/zip2"
 	"github.com/quanxiang-cloud/fileserver/pkg/guide"
 	"github.com/quanxiang-cloud/form/pkg/backup"
+	"github.com/quanxiang-cloud/form/pkg/backup/aide"
 	"strings"
 )
 
@@ -112,7 +114,6 @@ func (a *appData) ImportAppData(ctx context.Context, task *models.Task, handleDa
 		result[titleKey] = err.Error()
 		_ = a.appCenter.FailImport(ctx, appID)
 		a.sendMessage(err, result, task, handleData)
-
 		return
 	}
 	err = a.insertAppData(ctx, appID, task, handleData)
@@ -120,7 +121,6 @@ func (a *appData) ImportAppData(ctx context.Context, task *models.Task, handleDa
 		result[titleKey] = err.Error()
 		_ = a.appCenter.FailImport(ctx, appID)
 		a.sendMessage(err, result, task, handleData)
-
 		return
 	}
 	err = a.appCenter.SuccessImport(ctx, appID)
@@ -129,13 +129,11 @@ func (a *appData) ImportAppData(ctx context.Context, task *models.Task, handleDa
 		err = error2.New(code.ErrInternalError)
 		result[titleKey] = err.Error()
 		a.sendMessage(err, result, task, handleData)
-
 		return
 	}
 	a.sendRate(task, handleData, 100)
 	result[titleKey] = successImportApp
 	a.sendMessage(nil, result, task, handleData)
-
 }
 
 func (a *appData) UseTemplate(ctx context.Context, task *models.Task, handleData chan *basal.CallBackData) {
@@ -261,18 +259,22 @@ func (a *appData) packAppData(ctx context.Context, appID string, task *models.Ta
 	md5Info[appFileName] = getMd5(appInfo)
 	a.sendRate(task, handleData, 10)
 
-	formInfo := &bytes.Buffer{}
+	//formInfo := &bytes.Buffer{}
 
 	// export form
-	err = a.form.Export(ctx, appID, formInfo)
+	formInfo, err := a.form.Export(ctx, &aide.ExportOption{AppID: appID})
+	if err != nil {
+		return "", "", err
+	}
+	formBytes, err := json.Marshal(formInfo)
 	if err != nil {
 		return "", "", err
 	}
 	zipInfo = append(zipInfo, zip2.FileInfo{
 		Name: tableFileName,
-		Body: formInfo.Bytes(),
+		Body: formBytes,
 	})
-	md5Info[tableFileName] = getMd5(formInfo.Bytes())
+	md5Info[tableFileName] = getMd5(formBytes)
 	a.sendRate(task, handleData, 20)
 
 	// export persona
@@ -476,7 +478,18 @@ func (a *appData) insertAppData(ctx context.Context, appID string, task *models.
 	a.sendRate(task, handleData, 10)
 	var tableIDs map[string]string
 	if tableInfo != nil {
-		err := a.form.Import(ctx, appID, bytes.NewReader(tableInfo))
+		formBytes := new(backup.Result)
+		err := json.Unmarshal(tableInfo, &formBytes)
+		if err != nil {
+			logger.Logger.Errorw("Unmarshal form error", err)
+			return err
+		}
+		_, err = a.form.Import(ctx, formBytes,
+			&aide.ImportOption{
+				AppID:    appID,
+				UserID:   ctx.Value("User-Id").(string),
+				UserName: ctx.Value("User-Name").(string),
+			})
 		if err != nil {
 			logger.Logger.Errorw("import form data error", err)
 			return err
@@ -579,7 +592,7 @@ func getFileURL(nd *node) string {
 		if n.PackageName == staticPackageName &&
 			n.ExportName == staticExportName &&
 			n.Type == staticNodeType {
-			return n.Props["fileUrl"].Value
+			return n.Props["fileUrl"].Value.(string)
 		}
 	}
 	return ""
@@ -612,8 +625,8 @@ type node struct {
 }
 
 type tv struct {
-	Type  string `json:"type"`
-	Value string `json:"value"`
+	Type  string      `json:"type"`
+	Value interface{} `json:"value"`
 }
 
 func customPageURLReplace(url string) string {
@@ -632,4 +645,24 @@ func getFileName(path string) string {
 	}
 	idx = strings.LastIndex(path, "/")
 	return path[idx+1:]
+}
+
+func getUserID(ctx context.Context) header.KV {
+	_userID := "User-Id"
+	i := ctx.Value(_userID)
+	uid, ok := i.(string)
+	if ok {
+		return header.KV{_userID, uid}
+	}
+	return header.KV{_userID, "unexpected type"}
+}
+
+func getUserName(ctx context.Context) header.KV {
+	_userName := "User-Name"
+	i := ctx.Value(_userName)
+	uName, ok := i.(string)
+	if ok {
+		return header.KV{_userName, uName}
+	}
+	return header.KV{_userName, "unexpected type"}
 }
