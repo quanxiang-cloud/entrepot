@@ -1,0 +1,65 @@
+# port 端口
+# e.g :80
+port: :81
+
+# model  debug|release
+model: debug
+
+# processorNum Number of concurrent processes
+processorNum: 5
+
+
+# app-center host
+formHost: http://form
+
+polyAPIHost: http://polyapi:9090
+
+structorHost: http://structor:9014
+
+flowHost: http://flow
+
+appCenterHost: http://app-center
+
+personaHost: http://persona
+
+#  -------------------- hand out --------------------
+handout:
+  deadline: 30
+  dialTimeout: 30
+  maxIdleConns: 10
+
+#  -------------------- log --------------------
+# comply with zap log specification
+log:
+  level: -1
+  development: false
+  sampling:
+    initial: 100
+    thereafter: 100
+  outputPath:
+    - stderr
+  errorOutputPath:
+    - stderr
+
+#  -------------------- internalNet --------------------
+internalNet:
+  timeout: 20
+  maxIdleConns: 10
+
+# -------------------- mysql --------------------
+mysql:
+  host:
+  db: entrepot
+  user: root
+  password:
+  log: true
+
+
+# redis connection configuration
+redis:
+  addrs:
+    -
+    -
+    -
+  username:
+  password:
