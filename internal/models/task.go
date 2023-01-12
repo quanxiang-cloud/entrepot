@@ -71,4 +71,6 @@ type TaskRepo interface {
 	GetProcessing(db *gorm.DB, id string, types string) (int64, error)
 	DeleteByID(db *gorm.DB, id string) error
 	GetByCondition(db *gorm.DB, task *Task) (*Task, error)
+
+	ListProcessing(db *gorm.DB) ([]*Task, error)
 }

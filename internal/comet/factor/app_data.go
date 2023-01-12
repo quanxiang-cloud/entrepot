@@ -8,6 +8,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
 	"github.com/quanxiang-cloud/cabin/tailormade/header"
@@ -22,7 +24,6 @@ import (
 	"github.com/quanxiang-cloud/fileserver/pkg/guide"
 	"github.com/quanxiang-cloud/form/pkg/backup"
 	"github.com/quanxiang-cloud/form/pkg/backup/aide"
-	"strings"
 )
 
 const (
@@ -604,7 +605,7 @@ func replacePageKey(kvs []*client.KV, menus map[string]string, oldAppID, appID s
 		newK := strings.ReplaceAll(kv.Key, oldAppID, appID)
 		datas = append(datas, &client.KV{
 			Key:   newK,
-			Value: kv.Value,
+			Value: strings.ReplaceAll(kv.Value, oldAppID, appID),
 		})
 	}
 	return datas

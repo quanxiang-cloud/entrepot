@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"regexp"
+
 	"github.com/gin-gonic/gin"
 	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
@@ -13,9 +17,6 @@ import (
 	"github.com/quanxiang-cloud/entrepot/internal/service"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/code"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
-	"io/ioutil"
-	"net/http"
-	"regexp"
 )
 
 // BatchTask BatchTask
@@ -30,11 +31,13 @@ const (
 )
 
 // NewBatchTask NewBatchTask
-func NewBatchTask(conf *config.Config, factor chan *comet.FactorData) (*BatchTask, error) {
+func NewBatchTask(ctx context.Context, conf *config.Config, factor chan *comet.FactorData) (*BatchTask, error) {
 	batchTask, err := service.NewBatchTask(conf, factor)
 	if err != nil {
 		return nil, err
 	}
+
+	batchTask.Timeout(ctx)
 	return &BatchTask{
 		batchTask: batchTask,
 	}, nil

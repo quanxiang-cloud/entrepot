@@ -2,6 +2,7 @@ package restful
 
 import (
 	"context"
+
 	"github.com/quanxiang-cloud/entrepot/internal/comet"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
 
@@ -33,7 +34,7 @@ func NewRouter(ctx context.Context, c *config.Config) (*Router, error) {
 	if err != nil {
 		return nil, err
 	}
-	batchTask, err := NewBatchTask(c, factor.Factor)
+	batchTask, err := NewBatchTask(ctx, c, factor.Factor)
 	//engine.Group("/create", batchTask.Send)
 	if err != nil {
 		return nil, err
