@@ -101,6 +101,13 @@ func (t *taskRepo) List(db *gorm.DB, creatorID string, types string, status, pag
 	return taskList, total, err
 }
 
+func (t *taskRepo) ListProcessing(db *gorm.DB) ([]*models.Task, error) {
+	ql := db.Table(t.TableName()).Where("status = 1")
+	taskList := make([]*models.Task, 0)
+	err := ql.Find(&taskList).Error
+	return taskList, err
+}
+
 func (t *taskRepo) FinishTask(db *gorm.DB, task *models.Task) error {
 	return db.Table(t.TableName()).Where("id = ?", task.ID).Updates(
 		map[string]interface{}{

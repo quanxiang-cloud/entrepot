@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"time"
+
 	error2 "github.com/quanxiang-cloud/cabin/error"
 	"github.com/quanxiang-cloud/cabin/logger"
 	mysql2 "github.com/quanxiang-cloud/cabin/tailormade/db/mysql"
 	redis2 "github.com/quanxiang-cloud/cabin/tailormade/db/redis"
+	time2 "github.com/quanxiang-cloud/cabin/time"
 	"github.com/quanxiang-cloud/entrepot/internal/comet"
 	factor2 "github.com/quanxiang-cloud/entrepot/internal/comet/factor"
 	"github.com/quanxiang-cloud/entrepot/internal/logic"
@@ -14,7 +17,6 @@ import (
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/code"
 	"github.com/quanxiang-cloud/entrepot/pkg/misc/config"
 	"gorm.io/gorm"
-	"time"
 
 	"github.com/quanxiang-cloud/entrepot/internal/models"
 )
@@ -36,6 +38,7 @@ type BatchTask interface {
 	Subscribe(ctx context.Context, req *SubscribeReq) (*SubscribeResp, error)
 	GetProcessing(ctx context.Context, req *GetProcessingReq) (*GetProcessingResp, error)
 	Delete(ctx context.Context, req *DeleteReq) (*DeleteResp, error)
+	Timeout(ctx context.Context)
 }
 
 type task struct {
@@ -278,4 +281,39 @@ type DaprEvent struct {
 	Type            string         `json:"type"`
 	Specversion     string         `json:"specversion"`
 	Source          string         `json:"source"`
+}
+
+const (
+	timeout = 60 * 60 * 10
+)
+
+func (t *task) Timeout(ctx context.Context) {
+	tick := time.NewTicker(time.Minute * 10)
+	go func(t *task) {
+		for {
+			tasks, err := t.task.ListProcessing(t.db)
+			if err != nil {
+				logger.Logger.Errorw("fail list porcessing task", "err", err.Error())
+				continue
+			}
+
+			now := time2.NowUnix() / 1000
+			for _, task := range tasks {
+				if now-task.CreatedAt > timeout {
+					task.Status = models.TaskFail
+					task.Result = make(models.M)
+					task.Result["title"] = "Timeout"
+					task.FinishAt = time2.NowUnix()
+					t.task.FinishTask(t.db, task)
+				}
+			}
+
+			select {
+			case <-ctx.Done():
+				tick.Stop()
+				return
+			case <-tick.C:
+			}
+		}
+	}(t)
 }
